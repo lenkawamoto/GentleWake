@@ -6,10 +6,9 @@
 // Screen to set alarm times
   
 #define NUM_MENU_SECTIONS 1
-#define NUM_MENU_ALARM_ITEMS 9
+#define NUM_MENU_ALARM_ITEMS 8
   
 static alarm *s_alarms;
-static alarm *s_onetime;
 
 static Window *s_window;
 static MenuLayer *alarms_layer;
@@ -73,17 +72,6 @@ static void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuI
     
       switch (cell_index->row) {
         case 0:
-          // Set One-Time alarm
-          gen_alarm_str(s_onetime, alarmtimestr, sizeof(alarmtimestr));
-          if (s_onetime->enabled)
-            snprintf(alarmstr, sizeof(alarmstr), "%s - Hold to turn off", alarmtimestr);
-          else
-            snprintf(alarmstr, sizeof(alarmstr), "%s - Hold to turn on", alarmtimestr);
-        
-          menu_cell_basic_draw(ctx, cell_layer, "One-Time Alarm", alarmstr, NULL);
-          break;
-        
-        case 1:
           // Set alarm time for all days
           if (is_alarms_mixed()) {
             strncpy(alarmstr, "Mixed - Hold to turn off", sizeof(alarmstr));
@@ -113,27 +101,18 @@ static void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuI
 
 // Call back from AlarmTime screen to set alarm
 static void alarm_set(int day, int hour, int minute) {
-  switch (day) {
-    case -2:
-      // Set One-Time alarm
-      s_onetime->enabled = true;
-      s_onetime->hour = hour;
-      s_onetime->minute = minute;
-      break;
-    case -1:
-      // Set all days the same
-      for (int i = 0; i <= 6; i++) {
-        s_alarms[i].enabled = true;
-        s_alarms[i].hour = hour;
-        s_alarms[i].minute = minute;
-      }
-      break;
-    default:
-      // Set individual day
-      s_alarms[day].enabled = true;
-      s_alarms[day].hour = hour;
-      s_alarms[day].minute = minute;
-      break;
+  if (day == -1) {
+    // Set all days the same
+    for (int i = 0; i <= 6; i++) {
+      s_alarms[i].enabled = true;
+      s_alarms[i].hour = hour;
+      s_alarms[i].minute = minute;
+    }
+  } else {
+    // Set individual day
+    s_alarms[day].enabled = true;
+    s_alarms[day].hour = hour;
+    s_alarms[day].minute = minute;
   }
   layer_mark_dirty(menu_layer_get_layer(alarms_layer));
 }
@@ -145,12 +124,6 @@ static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, v
     case 0:
       switch (cell_index->row) {
         case 0:
-          show_alarmtime(-2, 
-                         s_onetime->enabled ? s_onetime->hour : 7,
-                         s_onetime->enabled ? s_onetime->minute : 0,
-                         alarm_set);
-          break;
-        case 1:
           if (is_alarms_mixed())
             show_alarmtime(-1, 7, 0, alarm_set);
           else
@@ -177,15 +150,6 @@ static void menu_longselect_callback(MenuLayer *menu_layer, MenuIndex *cell_inde
     case 0:
       switch (cell_index->row) {
         case 0:
-          if (s_onetime->enabled) {
-            s_onetime->enabled = false;  
-          } else {
-            s_onetime->enabled = true;
-            s_onetime->hour = 7;
-            s_onetime->minute = 0;
-          }
-          break;
-        case 1:
           if (is_alarms_mixed()) {
             for (int i = 0; i <= 6; i++)
               s_alarms[i].enabled = false;
@@ -220,15 +184,14 @@ static void handle_window_unload(Window* window) {
   destroy_ui();
 }
 
-void show_setalarms(alarm *alarms, alarm *onetime) {
+void show_setalarms(alarm *alarms) {
   initialise_ui();
   window_set_window_handlers(s_window, (WindowHandlers) {
     .unload = handle_window_unload,
   });
   
-  // Store pointer to alarms array and one-time alarm
+  // Store pointer to alarms array
   s_alarms = alarms;
-  s_onetime = onetime;
   
   // Set all the callbacks for the menu layer
   menu_layer_set_callbacks(alarms_layer, NULL, (MenuLayerCallbacks){
